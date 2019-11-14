@@ -99,9 +99,9 @@ struct mowfolder {
 
 //DEFINE MOWFILE FUNCTIONS HERE
 
-struct mowfolder *m_read_folder(char *path);
+struct mowfolder *m_read_folder(const char *path);
 
-struct mowfile *m_read_file(char *file_name);
+struct mowfile *m_read_file(const char *file_name);
 
 uint16_t m_path_compatible(char *path);
 
@@ -116,7 +116,7 @@ void m_folder_print(struct mowfolder *folder);
 //IMPLEMENT MOW FUNCTIONS HERE
 
 #ifdef _WIN32
-struct mowfolder* m_read_folder(char* path) {
+struct mowfolder* m_read_folder(const char* path) {
 	if (NULL == path) {
 		assert(path);
 		return NULL;
@@ -266,7 +266,7 @@ MOW_FILE_RETURN:
 	return NULL;
 }
 #else
-struct mowfolder *m_read_folder(char *path) {
+struct mowfolder *m_read_folder(const char *path) {
 	if (NULL == path) {
 		assert(path);
 		return NULL;
@@ -408,7 +408,7 @@ struct mowfolder *m_read_folder(char *path) {
 
 #endif
 
-struct mowfile *m_read_file(char *file_name) {
+struct mowfile *m_read_file(const char *file_name) {
 	if (NULL == file_name) {
 		assert(file_name);
 		return NULL;
@@ -425,7 +425,7 @@ uint16_t m_path_compatible(char *path) {    //TODO:(kerem) ADD VECTOR OPERATIONS
 		return 0;
 	}
 	size_t string_length = strlen(path);
-	//TODO:(kerem) PAD THE BUFFER THAN MAKE VECTOR OPERATIONS FOR FATER SEARCH
+	//TODO:(kerem) PAD THE BUFFER THAN MAKE VECTOR OPERATIONS FOR FASTER SEARCH
 	size_t i;
 	for (i = 0; i < string_length; i++) {
 		if (path[i] == M_OS_FALSE_DELIMITER_CHAR) return 0;
@@ -440,7 +440,7 @@ void m_path_conv_compat(char *path) {    //TODO:(kerem) ADD VECTOR OPERATIONS FO
 		return;
 	}
 	size_t string_length = strlen(path);
-	//TODO:(kerem) PAD THE BUFFER THAN MAKE VECTOR OPERATIONS FOR FATER SEARCH
+	//TODO:(kerem) PAD THE BUFFER THAN MAKE VECTOR OPERATIONS FOR FASTER SEARCH
 	size_t i;
 	for (i = 0; i < string_length; i++) {
 		if (path[i] == M_OS_FALSE_DELIMITER_CHAR) path[i] = M_OS_DELIMITER_CHAR;
@@ -482,9 +482,9 @@ uint64_t *m_folder_traverse(struct mowfolder *folder) {
 	uint64_t *file_folder_c = calloc(sizeof(uint64_t), 2);
 	assert(file_folder_c);
 	if (file_folder_c) {
-		for (int i = 0; i < folder->folder_count; ++i) {
+		for (uint64_t i = 0; i < folder->folder_count; ++i) {
 			uint64_t *c_file_folder_c = m_folder_traverse(folder->folders[i]);
-			printf("<DIR>%s\tSize:%llu\tFiles:%llu\tFolders:%llu\n",folder->folders[i]->folder_name,folder->folders[i]->folder_size,folder->folders[i]->file_count,folder->folders[i]->folder_count);
+			printf("<DIR>%s\tSize:%lu\tFiles:%lu\tFolders:%lu\n",folder->folders[i]->folder_name,folder->folders[i]->folder_size,folder->folders[i]->file_count,folder->folders[i]->folder_count);
 			assert(c_file_folder_c);
 			if (c_file_folder_c) {
 				file_folder_c[0] += c_file_folder_c[0];
@@ -496,15 +496,15 @@ uint64_t *m_folder_traverse(struct mowfolder *folder) {
 				return NULL;
 			}
 		}
-		for (int j = 0; j < folder->file_count; ++j) {
-			printf("%s\t%llu\n",folder->files[j]->file_name,folder->files[j]->content_length);
+		for (uint64_t j = 0; j < folder->file_count; ++j) {
+			printf("%s\t%lu\n",folder->files[j]->file_name,folder->files[j]->content_length);
 		}
-		printf("<DIR>%s\tSize:%llu\n", folder->folder_name, folder->folder_size);
+		printf("<DIR>%s\tSize:%lu\n", folder->folder_name, folder->folder_size);
 		file_folder_c[0] += folder->file_count;
 		file_folder_c[1] += folder->folder_count;
 	} else {
-		printf("Can't allocate memmory");
-		MOW_FILE_ERROR("m_fodler_traverse");
+		printf("Can't allocate memory");
+		MOW_FILE_ERROR("m_folder_traverse");
 	}
 
 
@@ -515,7 +515,7 @@ void m_folder_print(struct mowfolder *folder) {
 	if (folder) {
 		uint64_t *file_folder_c = m_folder_traverse(folder);
 		if (file_folder_c) {
-			printf("Files:%llu Folders:%llu\n", file_folder_c[0], file_folder_c[1]);
+			printf("Files:%lu Folders:%lu\n", file_folder_c[0], file_folder_c[1]);
 			free(file_folder_c);
 		} else {
 			printf("Error\n");
