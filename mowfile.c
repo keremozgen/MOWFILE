@@ -38,8 +38,9 @@ void main(void) {
 
 #else
 
-	struct mowfolder* tmp = m_read_folder("/home/asus/Desktop/PROJECT/");
-	//m_folder_print(tmp);
+	struct mowfolder* tmp = m_read_folder("/home/asus/Desktop/PROJECT/MOWFILE");
+	m_folder_print(tmp);
+	if(tmp)
 	m_free_folder(tmp);
 
 #endif
