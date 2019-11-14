@@ -15,7 +15,7 @@ void main(void) {
 
 
 #ifdef _WIN32
-    uint64_t size = 128;
+	uint64_t size = 128;
 	char* path = malloc(size);
 	if (!path) return;
 	for (uint64_t i = 0; i < size - 2; i++)
@@ -32,15 +32,15 @@ void main(void) {
 	printf("%s", path);
 	free(path);
 
-    struct mowfolder* tmp = m_read_folder("D:\\projects\\mowfile");
-    m_folder_print(tmp);
-    m_free_folder(tmp);
+	struct mowfolder* tmp = m_read_folder("D:\\projects\\mowfile");
+	m_folder_print(tmp);
+	m_free_folder(tmp);
 
 #else
 
-    struct mowfolder* tmp = m_read_folder("/home/asus/Desktop/PROJECT/");
-    //m_folder_print(tmp);
-    m_free_folder(tmp);
+	struct mowfolder* tmp = m_read_folder("/home/asus/Desktop/PROJECT/");
+	//m_folder_print(tmp);
+	m_free_folder(tmp);
 
 #endif
 
