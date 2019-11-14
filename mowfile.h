@@ -122,7 +122,6 @@ struct mowfolder* m_read_folder(char* path) {
 		return NULL;
 	}
 
-
 	//CHANGE THE CURRENT DIRECTORY TO PATH
 	if (!SetCurrentDirectory(path)) {
 		MOW_FILE_ERROR(path);
@@ -153,33 +152,40 @@ struct mowfolder* m_read_folder(char* path) {
 	//THEN CREATE THE PATH WITH THE MINIMAL STRING OR USE THE OS RETURNED ONE
 	current_folder->name_length = strlen(path);
 	current_folder->folder_name = calloc(strlen(path) + 1, sizeof(char));
-	current_folder->folder_size += current_folder->name_length;	//INCREASE THE FOLDER SIZE NOT 100% TRUE BUT WILL BE IMPORTANT
 	if (!current_folder->folder_name) goto MOW_FILE_FREE_STRUCT;	//IF WE CAN'T ALLOCATE MEMORY
+	current_folder->folder_size += current_folder->name_length;	//INCREASE THE FOLDER SIZE NOT 100% TRUE BUT WILL BE IMPORTANT	
 	memcpy(current_folder->folder_name, path, strlen(path));
-
 	do
 	{
-		if (!(ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+		if (!(ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))	//MAYBE ALSO CHECK FOR SHORTCUTS AND IGNORE THEM TOO JUST FOR SAME BEHAVIOUR WITH DIFFERENT OPERATING SYSTEMS
 		{
 			LARGE_INTEGER f_size;
 			f_size.LowPart = ffd.nFileSizeLow;
 			f_size.HighPart = ffd.nFileSizeHigh;
 			uint64_t file_size = (uint64_t)f_size.QuadPart;
 			uint64_t name_length = strlen(ffd.cFileName);
-			current_folder->file_count++;
-			struct mowfile** t = realloc(current_folder->files, current_folder->file_count * sizeof(struct mowfile*));
+			struct mowfile** t = realloc(current_folder->files, (current_folder->file_count + 1) * sizeof(struct mowfile*));
 			if (!t) {
 				MOW_FILE_ERROR("CAN'T REALLOC");
-				current_folder->file_count--;
 				goto MOW_FILE_FREE_STRUCT;
 			}
+			current_folder->file_count++;
 			current_folder->files = t;
 			struct mowfile* file = calloc(sizeof(struct mowfile), 1);
-			if (!file) goto MOW_FILE_FREE_STRUCT;	//IF WE CAN'T ALLOCATE MEMORY
+			if (!file)
+				goto MOW_FILE_FREE_STRUCT;    //IF WE CAN'T ALLOCATE MEMORY
 			file->file_name = calloc(name_length + 1, sizeof(char));
-			if (!file->file_name) goto MOW_FILE_FREE_STRUCT;	//IF WE CAN'T ALLOCATE MEMORY
+			if (!file->file_name) {
+				m_free_file(file);
+				current_folder->file_count--;
+				goto MOW_FILE_FREE_STRUCT;    //IF WE CAN'T ALLOCATE MEMORY
+			}
 			file->content = calloc(file_size, sizeof(char));
-			if (!file->content) goto MOW_FILE_FREE_STRUCT;	//IF WE CAN'T ALLOCATE MEMORY
+			if (!file->content) {
+				m_free_file(file);
+				current_folder->file_count--;
+				goto MOW_FILE_FREE_STRUCT;    //IF WE CAN'T ALLOCATE MEMORY
+			}
 			memcpy(file->file_name, ffd.cFileName, name_length);
 			//GET THE FILE CONTENT
 			file->content_length = file_size;
@@ -213,7 +219,7 @@ struct mowfolder* m_read_folder(char* path) {
 		}
 		else
 		{
-			if (strcmp(ffd.cFileName, ".") == 0 || strcmp(ffd.cFileName, "..") == 0) continue;
+			if (strcmp(ffd.cFileName, ".") == 0 || strcmp(ffd.cFileName, "..") == 0) continue;//MAYBE ALSO CHECK FOR SHORTCUTS AND IGNORE THEM TOO JUST FOR SAME BEHAVIOUR WITH DIFFERENT OPERATING SYSTEMS
 			current_folder->folder_count++;
 
 			struct mowfolder** t = realloc(current_folder->folders, current_folder->folder_count * sizeof(struct mowfolder*));
@@ -256,10 +262,10 @@ MOW_FILE_FREE_STRUCT:
 MOW_FILE_CLOSE_HANDLE:
 	if (!FindClose(h_find)) MOW_FILE_ERROR("Can't close folder handler");
 MOW_FILE_RETURN:
+	printf("Error returning\n");
 	return NULL;
 }
 #else
-
 struct mowfolder *m_read_folder(char *path) {
 	if (NULL == path) {
 		assert(path);
@@ -285,103 +291,99 @@ struct mowfolder *m_read_folder(char *path) {
 	//THEN CREATE THE PATH WITH THE MINIMAL STRING OR USE THE OS RETURNED ONE
 	current_folder->name_length = strlen(path);
 	current_folder->folder_name = calloc(strlen(path) + 1, sizeof(char));
-	current_folder->folder_size += current_folder->name_length;    //INCREASE THE FOLDER SIZE NOT 100% TRUE BUT WILL BE IMPORTANT
-	if (!current_folder->folder_name)
-		goto MOW_FILE_FREE_STRUCT;    //IF WE CAN'T ALLOCATE MEMORY
+	if (!current_folder->folder_name) goto MOW_FILE_FREE_STRUCT;    //IF WE CAN'T ALLOCATE MEMORY
+	current_folder->folder_size += current_folder->name_length;    //INCREASE THE FOLDER SIZE NOT 100% TRUE BUT WILL BE IMPORTANT	
 	memcpy(current_folder->folder_name, path, strlen(path));
 	struct dirent *ent;
 	while ((ent = readdir(dir)) != NULL) {
 		if (ent->d_type == DT_REG) {
-            //printf("%d is the length of the file %s\n",(int)ent->d_reclen,ent->d_name);
-            uint64_t file_size = 0;
-            uint64_t name_length = strlen(ent->d_name);
-            assert(name_length + path_length + 1 <= PATH_MAX);
-            char t_file_name[PATH_MAX + 1];
-            memcpy(t_file_name, path, path_length);
-            t_file_name[path_length] = M_OS_DELIMITER_CHAR;
-            memcpy(t_file_name + path_length + 1, ent->d_name, name_length);
-            t_file_name[path_length + name_length + 1] = 0;
-            FILE *f = fopen(t_file_name, "rb");
-            if (f) {
-                fseeko(f, 0, SEEK_END);
-                __off_t s = ftello(f);
-                if (s == -1) {
-                    printf("ERROR\n");
-                }
-                file_size = (uint64_t) s;
-                fseeko(f, 0, SEEK_SET);
-            } else {    //HANDLE CAN'T OPEN FILE FOR READ
-                printf("Can't open file %s %s\n", ent->d_name, t_file_name);
-                printf("%s\n", strerror(errno));
-                continue;
-            }
-            current_folder->file_count++;
-            struct mowfile **t = realloc(current_folder->files, current_folder->file_count * sizeof(struct mowfile *));
-            if (!t) {
-                MOW_FILE_ERROR("CAN'T REALLOC");
-                current_folder->file_count--;
-                goto MOW_FILE_FREE_STRUCT;
-            }
-            current_folder->files = t;
+			//printf("%d is the length of the file %s\n",(int)ent->d_reclen,ent->d_name);
+			uint64_t file_size = 0;
+			uint64_t name_length = strlen(ent->d_name);
+			assert(name_length + path_length + 1 <= PATH_MAX);
+			char t_file_name[PATH_MAX + 1];
+			memcpy(t_file_name, path, path_length);
+			t_file_name[path_length] = M_OS_DELIMITER_CHAR;
+			memcpy(t_file_name + path_length + 1, ent->d_name, name_length);
+			t_file_name[path_length + name_length + 1] = 0;
+			FILE *f = fopen(t_file_name, "rb");
+			if (f) {
+				fseeko(f, 0, SEEK_END);
+				__off_t s = ftello(f);
+				if (s == -1) {
+					printf("ERROR\n");
+				}
+				file_size = (uint64_t) s;
+				fseeko(f, 0, SEEK_SET);
+			} else {    //HANDLE CAN'T OPEN FILE FOR READ
+				printf("Can't open file %s %s\n", ent->d_name, t_file_name);
+				printf("%s\n", strerror(errno));
+				continue;
+			}
+			struct mowfile **t = realloc(current_folder->files, (current_folder->file_count + 1) * sizeof(struct mowfile *));
+			if (!t) {
+				MOW_FILE_ERROR("CAN'T REALLOC");
+				goto MOW_FILE_FREE_STRUCT;
+			}
+			current_folder->file_count++;
+			current_folder->files = t;
+			struct mowfile *file = calloc(sizeof(struct mowfile), 1);
+			if (!file)
+				goto MOW_FILE_FREE_STRUCT;    //IF WE CAN'T ALLOCATE MEMORY
+			file->file_name = calloc(name_length + 1, sizeof(char));
+			if (!file->file_name){
+				m_free_file(file);
+				current_folder->file_count--;
+				goto MOW_FILE_FREE_STRUCT;    //IF WE CAN'T ALLOCATE MEMORY
+			}
+			file->content = calloc(file_size, sizeof(char));
+			if (!file->content){
+				m_free_file(file);
+				current_folder->file_count--;
+				goto MOW_FILE_FREE_STRUCT;    //IF WE CAN'T ALLOCATE MEMORY
+			}
+			memcpy(file->file_name, ent->d_name, name_length);
+			//GET THE FILE CONTENT
+			file->content_length = file_size;
+			size_t nb = 0;
+			while (nb < file_size) {
+				size_t tb = fread(file->content + nb, sizeof(char), (size_t) (file_size - nb), f);
+				if (!tb) MOW_FILE_ERROR("FREAD");
+				nb += tb;
+			}
+			fclose(f);
 
-
-            struct mowfile *file = calloc(sizeof(struct mowfile), 1);
-            if (!file)
-                goto MOW_FILE_FREE_STRUCT;    //IF WE CAN'T ALLOCATE MEMORY
-            file->file_name = calloc(name_length + 1, sizeof(char));
-            if (!file->file_name){
-                m_free_file(file);
-                current_folder->file_count--;
-                goto MOW_FILE_FREE_STRUCT;    //IF WE CAN'T ALLOCATE MEMORY
-            }
-            file->content = calloc(file_size, sizeof(char));
-            if (!file->content){
-                m_free_file(file);
-                current_folder->file_count--;
-                goto MOW_FILE_FREE_STRUCT;    //IF WE CAN'T ALLOCATE MEMORY
-            }
-            memcpy(file->file_name, ent->d_name, name_length);
-            //GET THE FILE CONTENT
-            file->content_length = file_size;
-            size_t nb = 0;
-            while (nb < file_size) {
-                size_t tb = fread(file->content + nb, sizeof(char), (size_t) (file_size - nb), f);
-                if (!tb) MOW_FILE_ERROR("FREAD");
-                nb += tb;
-            }
-            fclose(f);
-
-            current_folder->files[current_folder->file_count - 1] = file;
-            current_folder->folder_size += file->content_length +
-                                           file->name_length;//INCREASE THE FOLDER SIZE NOT 100% TRUE BUT WILL BE IMPORTANT
+			current_folder->files[current_folder->file_count - 1] = file;
+			current_folder->folder_size += file->content_length +
+										   file->name_length;//INCREASE THE FOLDER SIZE NOT 100% TRUE BUT WILL BE IMPORTANT
 		} else {
-            if ((ent->d_type == DT_LNK) || (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0)) continue;
-            current_folder->folder_count++;
+			if ((ent->d_type == DT_LNK) || (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0)) continue;
+			current_folder->folder_count++;
 
-            struct mowfolder **t = realloc(current_folder->folders,
-                                           current_folder->folder_count * sizeof(struct mowfolder *));
-            if (!t) {
-                MOW_FILE_ERROR("CAN'T REALLOC");
-                current_folder->folder_count--;
-                goto MOW_FILE_FREE_STRUCT;
-            }
-            char tmp[PATH_MAX];    //CREATE THE TEMPORARY PATH NAME FOR RECURSIVE FUNCTION CALL
-            memcpy(tmp, path, path_length);
-            tmp[path_length] = M_OS_DELIMITER_CHAR;
-            memcpy(tmp + path_length + 1, ent->d_name, strlen(ent->d_name));
-            tmp[path_length + 1 + strlen(ent->d_name)] = 0;
-            struct mowfolder *child_folder = m_read_folder(tmp);
+			struct mowfolder **t = realloc(current_folder->folders,
+										   current_folder->folder_count * sizeof(struct mowfolder *));
+			if (!t) {
+				MOW_FILE_ERROR("CAN'T REALLOC");
+				current_folder->folder_count--;
+				goto MOW_FILE_FREE_STRUCT;
+			}
+			char tmp[PATH_MAX];    //CREATE THE TEMPORARY PATH NAME FOR RECURSIVE FUNCTION CALL
+			memcpy(tmp, path, path_length);
+			tmp[path_length] = M_OS_DELIMITER_CHAR;
+			memcpy(tmp + path_length + 1, ent->d_name, strlen(ent->d_name));
+			tmp[path_length + 1 + strlen(ent->d_name)] = 0;
+			struct mowfolder *child_folder = m_read_folder(tmp);
 
-            if (child_folder) {
-                current_folder->folders = t;
-                current_folder->folders[current_folder->folder_count - 1] = child_folder;
-                child_folder->parrent_folder = current_folder;
-                current_folder->folder_size += child_folder->folder_size +
-                                               child_folder->name_length;//INCREASE THE FOLDER SIZE NOT 100% TRUE BUT WILL BE IMPORTANT
-            } else {
-                current_folder->folder_count--;
-                goto MOW_FILE_FREE_STRUCT;
-            }
+			if (child_folder) {
+				current_folder->folders = t;
+				current_folder->folders[current_folder->folder_count - 1] = child_folder;
+				child_folder->parrent_folder = current_folder;
+				current_folder->folder_size += child_folder->folder_size +
+											   child_folder->name_length;//INCREASE THE FOLDER SIZE NOT 100% TRUE BUT WILL BE IMPORTANT
+			} else {
+				current_folder->folder_count--;
+				goto MOW_FILE_FREE_STRUCT;
+			}
 
 		}
 
