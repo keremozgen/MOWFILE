@@ -1,10 +1,8 @@
 #include "mowfile.h"
 
-
-
 //TODO:(kerem) MAYBE CHANGE THIS
 #ifdef __ANDROID__
-void android_main() {
+void android_main(struct android_app* app) {
 #else
 void main(void) {
 #endif
@@ -15,36 +13,18 @@ void main(void) {
 
 
 #ifdef _WIN32
-	uint64_t size = 128;
-	char* path = malloc(size);
-	if (!path) return;
-	for (uint64_t i = 0; i < size - 2; i++)
-	{
-		path[i] = M_OS_FALSE_DELIMITER_CHAR;
-	}
-
-	path[size - 2] = M_OS_DELIMITER_CHAR;
-	path[size - 1] = 0;
-
-	int r = m_path_compatible(path);
-	printf("%d returned\n",r);
-	m_path_conv_compat(path);
-	printf("%s", path);
-	free(path);
-
 	struct mowfolder* tmp = m_read_folder("D:\\projects\\mowfile");
-	m_folder_print(tmp);
-	m_free_folder(tmp);
-
-#else
-
+#elif __ANDROID__
+	printf("%s is the android current working directory\n", getcwd(NULL, 0));
+	struct mowfolder* tmp = m_read_folder("/data/data/org.fips.mowfile/files");
+#elif __linux__
 	struct mowfolder* tmp = m_read_folder("/home/asus/Desktop/PROJECT/MOWFILE");
-	m_folder_print(tmp);
-	if(tmp)
-	m_free_folder(tmp);
-
 #endif
-
+	if (tmp) {
+		m_folder_print(tmp);
+		m_free_folder(tmp);
+	}
+	
 #if defined(_WIN32) && defined(_DEBUG)
 	_CrtDumpMemoryLeaks();
 #endif

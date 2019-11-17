@@ -9,7 +9,6 @@
 #include <stdio.h>
 #include <string.h>
 
-
 //GENERAL DEFINES HERE
 #define MOWFILEOK 1
 #define MOWFILEERR 0
@@ -103,7 +102,7 @@ struct mowfolder *m_read_folder(char *path);
 
 struct mowfile *m_read_file(char *file_name);
 
-uint16_t m_path_compatible(char *path);
+int m_path_compatible(char *path);
 
 void m_path_conv_compat(char *path);
 
@@ -142,7 +141,7 @@ struct mowfolder* m_read_folder(char* path) {
 		goto MOW_FILE_RETURN;
 	}
 	//CREATE THE FOLDER STRUCT
-	struct mowfolder* current_folder = calloc(sizeof(struct mowfolder), 1);
+	struct mowfolder* current_folder = (struct mowfolder*)calloc(sizeof(struct mowfolder), 1);
 	assert(current_folder);
 	if (!current_folder) {	//HANDLE IF WE CAN'T ALLOCATE
 		goto MOW_FILE_CLOSE_HANDLE;
@@ -151,7 +150,7 @@ struct mowfolder* m_read_folder(char* path) {
 	// THEN CHANGE THE WORKING DIRECTORY COMPARE WITH THE RESULTS BEFORE
 	//THEN CREATE THE PATH WITH THE MINIMAL STRING OR USE THE OS RETURNED ONE
 	current_folder->name_length = strlen(path);
-	current_folder->folder_name = calloc(strlen(path) + 1, sizeof(char));
+	current_folder->folder_name = (char*)calloc(strlen(path) + 1, sizeof(char));
 	if (!current_folder->folder_name) goto MOW_FILE_FREE_STRUCT;	//IF WE CAN'T ALLOCATE MEMORY
 	current_folder->folder_size += current_folder->name_length;	//INCREASE THE FOLDER SIZE NOT 100% TRUE BUT WILL BE IMPORTANT	
 	memcpy(current_folder->folder_name, path, strlen(path));
@@ -164,23 +163,23 @@ struct mowfolder* m_read_folder(char* path) {
 			f_size.HighPart = ffd.nFileSizeHigh;
 			uint64_t file_size = (uint64_t)f_size.QuadPart;
 			uint64_t name_length = strlen(ffd.cFileName);
-			struct mowfile** t = realloc(current_folder->files, (current_folder->file_count + 1) * sizeof(struct mowfile*));
+			struct mowfile** t = (struct mowfile**)realloc(current_folder->files, (current_folder->file_count + 1) * sizeof(struct mowfile*));
 			if (!t) {
 				MOW_FILE_ERROR("CAN'T REALLOC");
 				goto MOW_FILE_FREE_STRUCT;
 			}
 			current_folder->file_count++;
 			current_folder->files = t;
-			struct mowfile* file = calloc(sizeof(struct mowfile), 1);
+			struct mowfile* file = (struct mowfile*)calloc(sizeof(struct mowfile), 1);
 			if (!file)
 				goto MOW_FILE_FREE_STRUCT;    //IF WE CAN'T ALLOCATE MEMORY
-			file->file_name = calloc(name_length + 1, sizeof(char));
+			file->file_name = (char*)calloc(name_length + 1, sizeof(char));
 			if (!file->file_name) {
 				m_free_file(file);
 				current_folder->file_count--;
 				goto MOW_FILE_FREE_STRUCT;    //IF WE CAN'T ALLOCATE MEMORY
 			}
-			file->content = calloc(file_size, sizeof(char));
+			file->content = (char*)calloc(file_size, sizeof(char));
 			if (!file->content) {
 				m_free_file(file);
 				current_folder->file_count--;
@@ -222,7 +221,7 @@ struct mowfolder* m_read_folder(char* path) {
 			if (strcmp(ffd.cFileName, ".") == 0 || strcmp(ffd.cFileName, "..") == 0) continue;//MAYBE ALSO CHECK FOR SHORTCUTS AND IGNORE THEM TOO JUST FOR SAME BEHAVIOUR WITH DIFFERENT OPERATING SYSTEMS
 			current_folder->folder_count++;
 
-			struct mowfolder** t = realloc(current_folder->folders, current_folder->folder_count * sizeof(struct mowfolder*));
+			struct mowfolder** t = (struct mowfolder**)realloc(current_folder->folders, current_folder->folder_count * sizeof(struct mowfolder*));
 			if (!t) {
 				MOW_FILE_ERROR("CAN'T REALLOC");
 				current_folder->folder_count--;
@@ -309,7 +308,7 @@ struct mowfolder *m_read_folder(char *path) {
 			FILE *f = fopen(t_file_name, "rb");
 			if (f) {
 				fseeko(f, 0, SEEK_END);
-				__off_t s = ftello(f);
+				off_t s = ftello(f);
 				if (s == -1) {
 					printf("ERROR\n");
 				}
@@ -419,13 +418,13 @@ struct mowfile *m_read_file(char *file_name) {
 
 //CHECK IF THE PATH CONTAINS ANY DELIMITER THAT IS NOT OS SPECIFIC
 //IF CONTAINS RETURN 1 IF NOT COMPATIBLE RETURN 0
-uint16_t m_path_compatible(char *path) {    //TODO:(kerem) ADD VECTOR OPERATIONS FOR FASTER CHECK
+int m_path_compatible(char* path) {    //TODO:(kerem) ADD VECTOR OPERATIONS FOR FASTER CHECK
 	if (NULL == path) {
 		assert(path);
 		return 0;
 	}
 	size_t string_length = strlen(path);
-	//TODO:(kerem) PAD THE BUFFER THAN MAKE VECTOR OPERATIONS FOR FATER SEARCH
+	//TODO:(kerem) PAD THE BUFFER THAN MAKE VECTOR OPERATIONS FOR FASTER SEARCH
 	size_t i;
 	for (i = 0; i < string_length; i++) {
 		if (path[i] == M_OS_FALSE_DELIMITER_CHAR) return 0;
@@ -479,7 +478,7 @@ int m_free_file(struct mowfile *file) {
 }
 
 uint64_t *m_folder_traverse(struct mowfolder *folder) {
-	uint64_t *file_folder_c = calloc(sizeof(uint64_t), 2);
+	uint64_t *file_folder_c = (uint64_t*)calloc(sizeof(uint64_t), 2);
 	assert(file_folder_c);
 	if (file_folder_c) {
 		for (int i = 0; i < folder->folder_count; ++i) {
