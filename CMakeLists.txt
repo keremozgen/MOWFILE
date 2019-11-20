@@ -2,7 +2,15 @@
 # project: MOWFILE
 #
 cmake_minimum_required(VERSION 2.8)
-
+if (ENABLE_UBSAN)
+	add_compile_options("-Wl, -fsanitize=undefined")
+endif()
+if (ENABLE_MSAN)
+	add_compile_options("-Wl, -fsanitize=memory")
+endif()
+if (ENABLE_TSAN)
+	add_compile_options("-Wl, -fsanitize=thread")
+endif()
 # include the fips main cmake file
 get_filename_component(FIPS_ROOT_DIR "../fips" ABSOLUTE)
 include("${FIPS_ROOT_DIR}/cmake/fips.cmake")
@@ -27,5 +35,3 @@ if (FIPS_ANDROID)
 endif()
 fips_end_app()
 fips_finish()
-
-

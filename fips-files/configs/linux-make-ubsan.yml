@@ -1,0 +1,6 @@
+defines:
+    ENABLE_UBSAN: ON
+platform: linux 
+generator: Unix Makefiles
+build_tool: make
+build_type: Debug
