@@ -27,7 +27,7 @@ int main(void) {
 #endif
 	if (tmp) {
 		//m_folder_print(tmp);
-		m_write_folder("/backupFOlder",tmp);
+		m_write_folder("/backupFolder",tmp);
 		m_free_folder(tmp);
 	}
 	
@@ -35,7 +35,11 @@ int main(void) {
 #if defined(_WIN32) && defined(_DEBUG)
 	_CrtDumpMemoryLeaks();
 #endif
+#ifdef __ANDROID__
+	return;
+#else
 	return 0;
+#endif
 }
 
 
