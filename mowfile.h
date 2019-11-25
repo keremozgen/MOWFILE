@@ -29,7 +29,8 @@
 #endif
 
 //IF ANDROID INCLUDE ANDROID ONLY LIBRARIES
-#ifdef __ANDROID__
+#if defined(__ANDROID__) && !defined(ANDROIDPRINT)
+#define ANDROIDPRINT
 #include <jni.h>
 #include <android/log.h>
 #include "android/android_native_app_glue.h"
@@ -37,7 +38,6 @@
 //ANDROID ONLY DEFINES HERE
 
 
-//TODO:(kerem) MAYBE GUARD THIS DEFINE
 #define printf(...) __android_log_print(ANDROID_LOG_DEBUG, "MOW", __VA_ARGS__);
 #endif
 
