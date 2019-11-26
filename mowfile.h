@@ -130,6 +130,8 @@ void m_folder_print(struct mowfolder* folder);
 
 int m_write_folder(char* abs_path, struct mowfolder* folder);
 
+int m_write_file(const char* abs_file_path, struct mowfile* file);
+
 char* m_get_current_dir(void);
 
 int m_set_current_dir(const char* abs_path);
@@ -140,6 +142,11 @@ int m_create_dir(char* abs_path);
 
 
 //IMPLEMENT MOW FUNCTIONS HERE
+
+static inline char* get_path_name(char* path) {
+	assert(path);
+	return strrchr(path, M_OS_DELIMITER_CHAR) + 1;
+}
 
 #ifdef _WIN32
 struct mowfolder* m_read_folder(const char* path) {
@@ -242,10 +249,13 @@ struct mowfolder* m_read_folder(const char* path) {
 					if (!tb) MOW_FILE_ERROR("FREAD");
 					nb += tb;
 				}
-				fclose(f);
+				if(EOF == fclose(f)){ //ON ERROR
+		            MOW_FILE_STRERROR();
+	            }
 			}
 			else {	//HANDLE CAN'T OPEN FILE FOR READ
 				printf("Can't open file %s\n", ffd.cFileName);
+				MOW_FILE_STRERROR();
 				m_free_file(file);	//FREE THE FILE STRUCT
 				current_folder->file_count--;	//DECREASE ALREADY INCREASED FILE COUNT
 				continue;
@@ -335,27 +345,18 @@ struct mowfolder* m_read_folder(const char* path) {
 	while ((ent = readdir(dir)) != NULL) {
 		if (ent->d_type == DT_REG) {
 			//printf("%d is the length of the file %s\n",(int)ent->d_reclen,ent->d_name);
-			uint64_t file_size = 0;
 			uint64_t name_length = strlen(ent->d_name);
-			assert(name_length + path_length + 1 <= M_PATH_MAX);
+			assert(name_length);
 			char t_file_name[M_PATH_MAX + 1];
 			memcpy(t_file_name, path, path_length);
 			t_file_name[path_length] = M_OS_DELIMITER_CHAR;
 			memcpy(t_file_name + path_length + 1, ent->d_name, name_length);
 			t_file_name[path_length + name_length + 1] = 0;
-			FILE* f = fopen(t_file_name, "rb");
-			if (f) {
-				fseeko(f, 0, SEEK_END);
-				off_t s = ftello(f);
-				if (s == -1) {
-					printf("ERROR\n");
-				}
-				file_size = (uint64_t)s;
-				fseeko(f, 0, SEEK_SET);
-			}
-			else {    //HANDLE CAN'T OPEN FILE FOR READ
-				printf("Can't open file %s %s\n", ent->d_name, t_file_name);
-				printf("%s\n", strerror(errno));
+
+			struct mowfile *file = m_read_file(t_file_name);
+			assert(file);
+			if(NULL == file) {
+				printf("Can't read file %s\n",t_file_name);
 				continue;
 			}
 			struct mowfile** t = realloc(current_folder->files, (current_folder->file_count + 1) * sizeof(struct mowfile*));
@@ -365,32 +366,6 @@ struct mowfolder* m_read_folder(const char* path) {
 			}
 			current_folder->file_count++;
 			current_folder->files = t;
-			struct mowfile* file = calloc(sizeof(struct mowfile), 1);
-			if (!file)
-				goto MOW_FILE_FREE_STRUCT;    //IF WE CAN'T ALLOCATE MEMORY
-			file->file_name = calloc(name_length + 1, sizeof(char));
-			if (!file->file_name) {
-				m_free_file(file);
-				current_folder->file_count--;
-				goto MOW_FILE_FREE_STRUCT;    //IF WE CAN'T ALLOCATE MEMORY
-			}
-			file->content = calloc(file_size, sizeof(char));
-			if (!file->content) {
-				m_free_file(file);
-				current_folder->file_count--;
-				goto MOW_FILE_FREE_STRUCT;    //IF WE CAN'T ALLOCATE MEMORY
-			}
-			memcpy(file->file_name, ent->d_name, name_length);
-			file->name_length = name_length;
-			//GET THE FILE CONTENT
-			file->content_length = file_size;
-			size_t nb = 0;
-			while (nb < file_size) {
-				size_t tb = fread(file->content + nb, sizeof(char), (size_t)(file_size - nb), f);
-				if (!tb) MOW_FILE_ERROR("FREAD");
-				nb += tb;
-			}
-			fclose(f);
 
 			current_folder->files[current_folder->file_count - 1] = file;
 			current_folder->folder_size += file->content_length +
@@ -425,11 +400,8 @@ struct mowfolder* m_read_folder(const char* path) {
 				current_folder->folder_count--;
 				goto MOW_FILE_FREE_STRUCT;
 			}
-
 		}
-
 	}
-
 
 	if (closedir(dir)) {
 		MOW_FILE_ERROR("Can't close folder handler");
@@ -450,11 +422,80 @@ MOW_FILE_RETURN:
 #endif
 
 struct mowfile* m_read_file(const char* file_name) {
-	if (NULL == file_name) {
+	if (NULL == file_name) {    //TODO:(kerem) maybe change the order (first assert than if) globally
 		assert(file_name);
 		return NULL;
 	}
 
+	uint64_t file_size = 0;
+	FILE* f = fopen(file_name, "rb");
+	if (f) {
+		fseeko(f, 0, SEEK_END);
+		off_t s = ftello(f);
+		if (s == -1) {
+			printf("ERROR\n");
+		}
+		file_size = (uint64_t)s;
+		fseeko(f, 0, SEEK_SET);
+	}
+	else {    //HANDLE CAN'T OPEN FILE FOR READ
+		printf("Can't open file %s\n", file_name);
+		printf("%s\n", strerror(errno));
+		goto MOW_FILE_RETURN;
+	}
+
+	struct mowfile* file = calloc(sizeof(struct mowfile), 1);
+	assert(file);
+	if (!file){
+		goto MOW_FILE_RETURN;    //IF WE CAN'T ALLOCATE MEMORY}
+	}
+
+	char *f_name = NULL;
+	f_name = get_path_name(file_name);
+	assert(f_name);
+	if(NULL == f_name){
+		MOW_FILE_ERROR(file_name);
+		goto MOW_FILE_FREE_STRUCT;
+	}
+
+	uint64_t name_length = f_name - file_name;
+	assert(name_length);
+
+	file->file_name = calloc(name_length + 1, sizeof(char));
+	assert(file->file_name);
+	if (NULL == file->file_name) {
+		goto MOW_FILE_FREE_STRUCT;    //IF WE CAN'T ALLOCATE MEMORY
+	}
+	file->content = calloc(file_size, sizeof(char));
+	assert(file->content);
+	if (NULL == file->content) {
+		goto MOW_FILE_FREE_STRUCT;    //IF WE CAN'T ALLOCATE MEMORY
+	}
+
+	memcpy(file->file_name, f_name, name_length);
+	file->name_length = name_length;
+	//GET THE FILE CONTENT
+	file->content_length = file_size;
+	size_t nb = 0;
+	while (nb < file_size) {
+		size_t tb = fread(file->content + nb, sizeof(char), (size_t)(file_size - nb), f);
+		assert(tb);
+		if (!tb) MOW_FILE_ERROR("FREAD");
+		nb += tb;
+	}
+	if(EOF == fclose(f)){ //ON ERROR
+		MOW_FILE_STRERROR();
+	}
+	return file;
+
+	//ERROR CONDITIONS RIGHT HERE BEFORE RETURN
+	MOW_FILE_FREE_STRUCT:
+	if(EOF == fclose(f)){ //ON ERROR
+		MOW_FILE_STRERROR();
+	}
+	m_free_file(file);
+	MOW_FILE_RETURN:
+	printf("Error returning\n");
 	return NULL;
 }
 
@@ -587,13 +628,7 @@ void m_folder_print(struct mowfolder* folder) {
 }
 
 
-static inline char* get_path_name(char* path) {
-	assert(path);
-	return strrchr(path, M_OS_DELIMITER_CHAR) + 1;
-}
-
-
-int write_file(const char* abs_file_path, struct mowfile* file) {
+int m_write_file(const char* abs_file_path, struct mowfile* file) {
 	//CHECK THE PARAMETERS
 	assert(abs_file_path);
 	assert(file);
@@ -625,13 +660,16 @@ int write_file(const char* abs_file_path, struct mowfile* file) {
 		assert(nb);
 		if (0 == nb) {
 			MOW_FILE_STRERROR();
-			fclose(f);
+			if(EOF == fclose(f)){ //ON ERROR
+				MOW_FILE_STRERROR();
+			}
 			return MOWFILEERR;
 		}
 		byte_count += (uint64_t)nb;
 	}
-	if (f)
-		fclose(f);
+	if(EOF == fclose(f)){ //ON ERROR
+		MOW_FILE_STRERROR();
+	}
 
 	return MOWFILEOK;
 }
@@ -665,7 +703,7 @@ int write_folder(const char* abs_path, struct mowfolder* folder) {
 	}
 	for (uint64_t i = 0; i < folder->file_count; i++)
 	{
-		if (MOWFILEERR == write_file(abs_path, folder->files[i])) return MOWFILEERR;
+		if (MOWFILEERR == m_write_file(abs_path, folder->files[i])) return MOWFILEERR;
 	}
 	return MOWFILEOK;
 }

@@ -25,9 +25,10 @@ int main(void) {
 	struct mowfolder* tmp = m_read_folder("/home/asus/Desktop/PROJECT/MOWFILE");
 	if (!tmp) { printf("WSL\n"); tmp = m_read_folder("/mnt/d/PROJECTS/MOWFILE/"); }
 #endif
+printf("Started\n");
 	if (tmp) {
-		//m_folder_print(tmp);
-		m_write_folder("/backupFolder",tmp);
+		m_folder_print(tmp);
+		m_write_folder("/home/asus/Desktop/ANAN4331",tmp);
 		m_free_folder(tmp);
 	}
 	

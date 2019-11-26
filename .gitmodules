@@ -1,3 +1,0 @@
-[submodule "fips-files"]
-	path = fips-files
-	url = https://github.com/keremozgen/fips-files.git
