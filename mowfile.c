@@ -28,7 +28,7 @@ int main(void) {
 printf("Started\n");
 	if (tmp) {
 		m_folder_print(tmp);
-		m_write_folder("/home/asus/Desktop/ANAN4331",tmp);
+		m_write_folder("/home/asus/Desktop/DENEME4331",tmp);
 		m_free_folder(tmp);
 	}
 	
