@@ -458,7 +458,7 @@ struct mowfile* m_read_file(const char* file_name) {
 		goto MOW_FILE_FREE_STRUCT;
 	}
 
-	uint64_t name_length = f_name - file_name;
+	uint64_t name_length = strlen(f_name);
 	assert(name_length);
 
 	file->file_name = calloc(name_length + 1, sizeof(char));
