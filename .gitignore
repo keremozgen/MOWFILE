@@ -7,3 +7,4 @@
 #<fips
 .vs/
 valgrind-out.txt
+mowfile.c
