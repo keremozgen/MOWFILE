@@ -1,5 +1,5 @@
 # MOWFILE
-MOW FILE is a cross platform, easy to use and a basic file read-write library.
+MOW FILE is a cross platform, easy to use and a basic file read-write library. It is a basic header file so you can just include it. You don't need to use CMakeLists.txt or fips build tool.
 	
 	It includes basic file/folder i/o operations. Here is a list of functions and explanations for them:
 	
