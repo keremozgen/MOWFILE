@@ -8,6 +8,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/types.h>
 
 //GENERAL DEFINES HERE
 #define MOWFILEOK 1
@@ -15,7 +16,18 @@
 
 #define MOW_FILE_LINE() printf(" %s %d\n",__FILE__,__LINE__)
 #define MOW_FILE_CHECK(x) if(x == MOWFILEERR) printf("\n%s %d MOWFILEERR\n",__FILE__,__LINE__)
+#ifdef _WIN32
+char MFILE_WIN_ERR_BUFFER[1024] = { 0 };
+uint32_t MFILE_WIN_ERR_CODE = 0;
+#define MOW_FILE_STRERROR() MFILE_WIN_ERR_CODE = GetLastError();\
+	FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,NULL,MFILE_WIN_ERR_CODE, \
+	MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), MFILE_WIN_ERR_BUFFER,sizeof(MFILE_WIN_ERR_BUFFER),NULL);\
+	MFILE_WIN_ERR_BUFFER[1023] = 0;\
+	printf("\nERROR CODE: %u %s %s %d\n", MFILE_WIN_ERR_CODE, MFILE_WIN_ERR_BUFFER,__FILE__,__LINE__);\
+MFILE_WIN_ERR_CODE = 0; *MFILE_WIN_ERR_BUFFER = 0
+#else
 #define MOW_FILE_STRERROR() printf("\n%s %s %d\n",strerror(errno),__FILE__,__LINE__)
+#endif
 #define MOW_FILE_ERR_CHECK(x) if(x == MOWFILEERR) printf("\n%s %s %d\n",strerror(errno),__FILE__,__LINE__)
 #define MOW_FILE_ERR_PARAM_STR(x,y) if(x == MOWFILEERR) printf("\n%s \"%s\" %s %d\n",strerror(errno),y,__FILE__,__LINE__)
 #define MOW_FILE_ERR_CHECK_PARAM_STR(x,y) assert(x);if(x == MOWFILEERR) printf("\n%s \"%s\" %s %d\n",strerror(errno),y,__FILE__,__LINE__)
@@ -34,10 +46,8 @@
 #include <jni.h>
 #include <android/log.h>
 #include "android/android_native_app_glue.h"
-
-//ANDROID ONLY DEFINES HERE
-
-
+#endif
+#if defined(__ANDROID__)
 #define printf(...) __android_log_print(ANDROID_LOG_DEBUG, "MOW", __VA_ARGS__);
 #endif
 
@@ -74,7 +84,6 @@
 
 #include <dirent.h>
 #include <sys/stat.h>
-#include <sys/types.h>
 #include <errno.h>
 
 #endif
@@ -216,8 +225,9 @@ struct mowfolder* m_read_folder(const char* path) {
 				current_folder->file_count--;
 				goto MOW_FILE_FREE_STRUCT;    //IF WE CAN'T ALLOCATE MEMORY
 			}
-			file->content = (char*)calloc(file_size, sizeof(char));
-			if (!file->content) {
+			if (file_size)
+				file->content = (char*)calloc(file_size, sizeof(char));
+			if (NULL == file->content && 0 != file->content_length) {
 				m_free_file(file);
 				current_folder->file_count--;
 				goto MOW_FILE_FREE_STRUCT;    //IF WE CAN'T ALLOCATE MEMORY
@@ -249,9 +259,9 @@ struct mowfolder* m_read_folder(const char* path) {
 					if (!tb) MOW_FILE_ERROR("FREAD");
 					nb += tb;
 				}
-				if(EOF == fclose(f)){ //ON ERROR
-		            MOW_FILE_STRERROR();
-	            }
+				if (EOF == fclose(f)) { //ON ERROR
+					MOW_FILE_STRERROR();
+				}
 			}
 			else {	//HANDLE CAN'T OPEN FILE FOR READ
 				printf("Can't open file %s\n", ffd.cFileName);
@@ -353,10 +363,10 @@ struct mowfolder* m_read_folder(const char* path) {
 			memcpy(t_file_name + path_length + 1, ent->d_name, name_length);
 			t_file_name[path_length + name_length + 1] = 0;
 
-			struct mowfile *file = m_read_file(t_file_name);
+			struct mowfile* file = m_read_file(t_file_name);
 			assert(file);
-			if(NULL == file) {
-				printf("Can't read file %s\n",t_file_name);
+			if (NULL == file) {
+				printf("Can't read file %s\n", t_file_name);
 				continue;
 			}
 			struct mowfile** t = realloc(current_folder->files, (current_folder->file_count + 1) * sizeof(struct mowfile*));
@@ -430,30 +440,39 @@ struct mowfile* m_read_file(const char* file_name) {
 	uint64_t file_size = 0;
 	FILE* f = fopen(file_name, "rb");
 	if (f) {
+#ifdef _WIN32
+		fseek(f, 0, SEEK_END);
+		off_t s = ftell(f);
+#else
 		fseeko(f, 0, SEEK_END);
 		off_t s = ftello(f);
+#endif
 		if (s == -1) {
 			printf("ERROR\n");
 		}
 		file_size = (uint64_t)s;
+#ifdef _WIN32
+		fseek(f, 0, SEEK_SET);
+#else
 		fseeko(f, 0, SEEK_SET);
+#endif
 	}
 	else {    //HANDLE CAN'T OPEN FILE FOR READ
-		printf("Can't open file %s\n", file_name);
-		printf("%s\n", strerror(errno));
+		//printf("Can't open file %s\n", file_name);
+		//printf("%s\n", strerror(errno));
 		goto MOW_FILE_RETURN;
 	}
 
 	struct mowfile* file = calloc(sizeof(struct mowfile), 1);
 	assert(file);
-	if (!file){
+	if (!file) {
 		goto MOW_FILE_RETURN;    //IF WE CAN'T ALLOCATE MEMORY}
 	}
 
-	char *f_name = NULL;
+	char* f_name = NULL;
 	f_name = get_path_name(file_name);
 	assert(f_name);
-	if(NULL == f_name){
+	if (NULL == f_name) {
 		MOW_FILE_ERROR(file_name);
 		goto MOW_FILE_FREE_STRUCT;
 	}
@@ -466,10 +485,13 @@ struct mowfile* m_read_file(const char* file_name) {
 	if (NULL == file->file_name) {
 		goto MOW_FILE_FREE_STRUCT;    //IF WE CAN'T ALLOCATE MEMORY
 	}
-	file->content = calloc(file_size, sizeof(char));
-	assert(file->content);
-	if (NULL == file->content) {
-		goto MOW_FILE_FREE_STRUCT;    //IF WE CAN'T ALLOCATE MEMORY
+
+	if (file_size) {
+		file->content = calloc(file_size, sizeof(char));
+		assert(file->content);
+		if (NULL == file->content) {
+			goto MOW_FILE_FREE_STRUCT;    //IF WE CAN'T ALLOCATE MEMORY
+		}
 	}
 
 	memcpy(file->file_name, f_name, name_length);
@@ -483,19 +505,18 @@ struct mowfile* m_read_file(const char* file_name) {
 		if (!tb) MOW_FILE_ERROR("FREAD");
 		nb += tb;
 	}
-	if(EOF == fclose(f)){ //ON ERROR
+	if (EOF == fclose(f)) { //ON ERROR
 		MOW_FILE_STRERROR();
 	}
 	return file;
 
 	//ERROR CONDITIONS RIGHT HERE BEFORE RETURN
-	MOW_FILE_FREE_STRUCT:
-	if(EOF == fclose(f)){ //ON ERROR
+MOW_FILE_FREE_STRUCT:
+	if (EOF == fclose(f)) { //ON ERROR
 		MOW_FILE_STRERROR();
 	}
 	m_free_file(file);
-	MOW_FILE_RETURN:
-	printf("Error returning\n");
+MOW_FILE_RETURN:
 	return NULL;
 }
 
@@ -646,8 +667,7 @@ int m_write_file(const char* abs_file_path, struct mowfile* file) {
 	memcpy(abs_file_name + abs_path_len + 1, file->file_name, file->name_length);
 	abs_file_name[abs_path_len + 1 + file->name_length] = 0;
 #endif
-
-	FILE* f = fopen(abs_file_name, "wb");
+	FILE* f = fopen(abs_file_name, "wb+");
 	if (NULL == f) {
 		MOW_FILE_STRERROR();
 		return MOWFILEERR;
@@ -660,14 +680,14 @@ int m_write_file(const char* abs_file_path, struct mowfile* file) {
 		assert(nb);
 		if (0 == nb) {
 			MOW_FILE_STRERROR();
-			if(EOF == fclose(f)){ //ON ERROR
+			if (EOF == fclose(f)) { //ON ERROR
 				MOW_FILE_STRERROR();
 			}
 			return MOWFILEERR;
 		}
 		byte_count += (uint64_t)nb;
 	}
-	if(EOF == fclose(f)){ //ON ERROR
+	if (EOF == fclose(f)) { //ON ERROR
 		MOW_FILE_STRERROR();
 	}
 
@@ -746,7 +766,16 @@ char* m_get_current_dir(void) {
 }
 
 int m_set_current_dir(const char* abs_path) {
-
+#ifdef _WIN32
+	if (0 == _chdir(abs_path)) {
+		return MOWFILEOK;
+	}
+#else
+	if (0 == chdir(abs_path)) {
+		return MOWFILEOK;
+	}
+#endif
+	MOW_FILE_STRERROR();
 	return MOWFILEERR;
 }
 
@@ -773,7 +802,7 @@ int create_dir(const char* abs_path) {
 #else
 	if (0 != mkdir(abs_path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)) {
 #endif
-		MOW_FILE_ERR_PARAM_STR(MOWFILEERR, abs_path);
+		strerror(errno);
 		return MOWFILEERR;
 	}
 	return MOWFILEOK;
@@ -781,9 +810,9 @@ int create_dir(const char* abs_path) {
 
 int m_create_dir(char* abs_path) {
 	assert(abs_path);
-	if (NULL == abs_path || abs_path[0] != '/' || MOWFILEOK == m_dir_exist(abs_path)) return MOWFILEERR;
+	if (NULL == abs_path || MOWFILEOK == m_dir_exist(abs_path)) return MOWFILEERR;
 
-	char* path_pos = abs_path + 1;
+	char* path_pos = abs_path;
 	uint64_t pos = 0;
 	char* t_path = NULL;
 	while (path_pos) {
@@ -802,11 +831,12 @@ int m_create_dir(char* abs_path) {
 			create_dir(abs_path);
 			abs_path[pos] = M_OS_DELIMITER_CHAR;
 #endif
-			create_dir(t_path);
+			if (MOWFILEERR == m_dir_exist(t_path))
+				create_dir(t_path);
 			path_pos++;
 			free(t_path);
 		}
 	}
-	if(MOWFILEERR == create_dir(abs_path)) return MOWFILEERR;
+
 	return MOWFILEOK;
 }
