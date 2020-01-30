@@ -106,7 +106,7 @@ MFILE_WIN_ERR_CODE = 0; *MFILE_WIN_ERR_BUFFER = 0
 struct mowfile {
 	uint64_t name_length;
 	char* file_name;
-	uint64_t content_length;
+	uint64_t content_length;	//CONTENT LENGTH IS FILE SIZE IF YOU WANT TO PRINT ALLOCATE CONTENT_LENGTH + 1
 	char* content;
 };
 
@@ -127,9 +127,9 @@ struct mowfolder* m_read_folder(const char* path);
 
 struct mowfile* m_read_file(const char* file_name);
 
-int m_path_compatible(char* path);
+int m_path_compatible(char* path);	//IS THE PATH COMPATIBLE WITH THE CURRENT OS CHECHS PATH DELIMITERS '/' '\\'
 
-void m_path_conv_compat(char* path);
+void m_path_conv_compat(char* path);	//CONVERT PATH TO OS COMPATIBLE VERSION
 
 int m_free_folder(struct mowfolder* folder);
 
